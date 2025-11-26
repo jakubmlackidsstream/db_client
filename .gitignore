@@ -1,0 +1,6 @@
+/sample.ipynb
+*.zip
+.env
+.venv
+.idea
+/formula1.db
