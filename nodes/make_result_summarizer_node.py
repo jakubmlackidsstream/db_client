@@ -10,32 +10,29 @@ def make_result_summarizer_node(llm: BaseChatModel, max_rows: int = 20, max_cols
     Factory that creates a result_summarizer node bound to a specific LLM.
 
     max_rows: maximum number of rows from query_result to show in the prompt
-    max_cols: maximum number of columns to include per row in the prompt
+              and in the Markdown table appended to the final answer.
+    max_cols: maximum number of columns to include per row.
     """
 
     def _format_result_for_prompt(query_result: List[Dict[str, Any]], max_rows: int, max_cols: int) -> str:
         """
-        Turn the query_result (list of dicts) into a compact text table or JSON-like preview.
+        Turn the query_result (list of dicts) into a compact text table for the LLM prompt.
         """
         if not query_result:
             return "No rows returned."
 
-        # Limit columns
         all_columns = list(query_result[0].keys())
         columns = all_columns[:max_cols]
 
         lines: List[str] = []
-        # Header
         header = " | ".join(columns)
         lines.append(header)
         lines.append("-" * len(header))
 
-        # Rows
         for row in query_result[:max_rows]:
             values = []
             for col in columns:
                 val = row.get(col)
-                # Simple stringification + truncation
                 s = str(val)
                 if len(s) > 40:
                     s = s[:37] + "..."
@@ -44,6 +41,35 @@ def make_result_summarizer_node(llm: BaseChatModel, max_rows: int = 20, max_cols
 
         if len(query_result) > max_rows:
             lines.append(f"... ({len(query_result) - max_rows} more rows not shown)")
+
+        return "\n".join(lines)
+
+    def _build_markdown_table(query_result: List[Dict[str, Any]], max_rows: int, max_cols: int) -> str:
+        """
+        Build a proper Markdown table to append to the final answer.
+        """
+        if not query_result:
+            return ""
+
+        columns = list(query_result[0].keys())[:max_cols]
+
+        lines: List[str] = []
+        lines.append("| " + " | ".join(columns) + " |")
+        lines.append("| " + " | ".join("---" for _ in columns) + " |")
+
+        for row in query_result[:max_rows]:
+            cells = []
+            for col in columns:
+                val = row.get(col)
+                s = str(val) if val is not None else ""
+                s = s.replace("|", "\\|")
+                if len(s) > 50:
+                    s = s[:47] + "..."
+                cells.append(s)
+            lines.append("| " + " | ".join(cells) + " |")
+
+        if len(query_result) > max_rows:
+            lines.append(f"\n*... {len(query_result) - max_rows} more rows not shown*")
 
         return "\n".join(lines)
 
@@ -116,14 +142,16 @@ def make_result_summarizer_node(llm: BaseChatModel, max_rows: int = 20, max_cols
         ]
 
         response = llm.invoke(messages)
-        # Normalize response to text
-        final_answer = response.content if hasattr(response, "content") else str(response)
+        summary = response.content if hasattr(response, "content") else str(response)
+
+        markdown_table = _build_markdown_table(query_result, max_rows, max_cols)
+        final_answer = f"{summary}\n\n{markdown_table}" if markdown_table else summary
 
         return {
             "final_answer": final_answer,
             "last_query": user_query,
             "last_sql_query": state.sql_query,
-            "last_result_summary": final_answer,
+            "last_result_summary": summary,
         }
 
     return result_summarizer

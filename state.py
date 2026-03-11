@@ -71,6 +71,7 @@ class GraphState(BaseModel):
         description="SQL execution error, if any"
     )
     result_status: Optional[str] = None
+    fix_attempts: int = 0
     clarification_question: Optional[str] = None
 
     last_query: Optional[str] = None
@@ -79,3 +80,17 @@ class GraphState(BaseModel):
     last_filters: Optional[Dict[str, Any]] = None
 
     final_answer: Optional[str] = None
+
+    # -- Knowledge store --
+    known_terms: Dict[str, str] = Field(
+        default_factory=dict,
+        description="User-defined vocabulary: term → definition"
+    )
+    pending_clarification_for: Optional[str] = Field(
+        default=None,
+        description="Term currently awaiting user clarification"
+    )
+    ambiguous_terms: List[str] = Field(
+        default_factory=list,
+        description="Terms in the current query flagged as ambiguous"
+    )
