@@ -4,3 +4,4 @@
 .venv
 .idea
 /formula1.db
+.pyc
