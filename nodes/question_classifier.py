@@ -7,7 +7,7 @@ from state import GraphState  # adjust to your actual path
 
 
 class QuestionClassification(BaseModel):
-    question_type: Literal["db_read", "db_schema_question", "chitchat", "unsupported"]
+    question_type: Literal["db_read", "db_schema_question", "chitchat", "unsupported", "manage_terms"]
     intent_description: str
 
 
@@ -56,6 +56,8 @@ def make_question_classifier_node(llm: BaseChatModel):
             "- db_read: wants to read or analyze data from the database.\n"
             "- db_schema_question: asks about tables, columns, or database structure.\n"
             "- chitchat: general questions or explanations not requiring the database.\n"
+            "- manage_terms: wants to add, update, delete, or list stored term definitions "
+            "(e.g. 'define X as Y', 'change the definition of X', 'forget X', 'what terms do you know').\n"
             "- unsupported: wants to write/modify/delete data, or otherwise out of scope.\n\n"
             "Use the provided response schema."
         )

@@ -2,7 +2,7 @@ from pydantic import BaseModel
 from typing import Dict, Any
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 
 from state import GraphState
 
@@ -39,9 +39,10 @@ def make_ask_clarification_node(llm: BaseChatModel):
             "Write a single, concise message that asks for clarification "
             "of ALL listed terms at once — do not split into separate "
             "messages.\n"
-            "For each term, suggest 2-3 concrete, measurable examples "
-            "(e.g. thresholds, time ranges, status values).\n"
-            "Number each sub-question clearly (1., 2., …)."
+            "For each term, ask exactly ONE focused question. "
+            "Do NOT list multiple sub-options or alternative interpretations. "
+            "Keep the whole message short: one line per term.\n"
+            "Number each question clearly (1., 2., …)."
         )
 
         terms_text = "\n".join(f"- '{t}'" for t in terms)
@@ -59,6 +60,7 @@ def make_ask_clarification_node(llm: BaseChatModel):
         pending = TERMS_SEP.join(terms)
 
         return {
+            "messages": [AIMessage(content=result.question)],
             "clarification_question": result.question,
             "pending_clarification_for": pending,
             "last_query": user_query,

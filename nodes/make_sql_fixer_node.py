@@ -44,7 +44,9 @@ def make_sql_fixer_node(llm: BaseChatModel):
         broken_sql = state.sql_query or ""
         error_message = state.execution_error or "Unknown error"
         user_query = (state.user_query or "").strip()
-        schema_summary = state.db_schema_summary or "No schema information available."
+        schema_summary = (
+            state.db_schema_summary or "No schema information available."
+        )
 
         system_prompt = (
             "You are an expert SQL debugger for SQLite databases.\n\n"
@@ -55,9 +57,31 @@ def make_sql_fixer_node(llm: BaseChatModel):
             "- The original user question.\n\n"
             "Your task is to:\n"
             "1. Identify the cause of the error.\n"
-            "2. Produce a corrected SQL query that avoids the error and answers the question.\n"
-            "3. Only generate read-only SELECT queries (no INSERT, UPDATE, DELETE, DROP, etc.).\n"
+            "2. Produce a corrected SQL query that avoids the error "
+            "and answers the question.\n"
+            "3. Only generate read-only SELECT queries "
+            "(no INSERT, UPDATE, DELETE, DROP, etc.).\n"
             "4. Use SQLite-compatible syntax.\n"
+            "5. NEVER use date('now') or datetime('now') — the database"
+            " is a static historical snapshot, 'now' is past all records"
+            " and returns zero rows. Replace every date('now', ...) "
+            "with:\n"
+            "   date((SELECT MAX(OrderDate) FROM Orders), ...)\n"
+            "   e.g. date('now', '-6 months') ->\n"
+            "        date((SELECT MAX(OrderDate) FROM Orders),"
+            " '-6 months')\n"
+            "6. SQLite does NOT support PostgreSQL/standard date "
+            "functions. Replace them as follows:\n"
+            "   DATE_TRUNC('year',  col) -> strftime('%Y', col)\n"
+            "   DATE_TRUNC('month', col) -> strftime('%Y-%m', col)\n"
+            "   DATE_TRUNC('quarter', col) -> not supported, use:\n"
+            "     ((CAST(strftime('%m', col) AS INTEGER) - 1) / 3)"
+            " + 1\n"
+            "   EXTRACT(YEAR  FROM col) ->"
+            " CAST(strftime('%Y', col) AS INTEGER)\n"
+            "   EXTRACT(MONTH FROM col) ->"
+            " CAST(strftime('%m', col) AS INTEGER)\n"
+            "   TO_CHAR(col, 'YYYY-MM') -> strftime('%Y-%m', col)\n"
         )
 
         user_prompt = (
@@ -73,7 +97,7 @@ def make_sql_fixer_node(llm: BaseChatModel):
             HumanMessage(content=user_prompt),
         ]
 
-        fixed: FixedSQL = structured_llm.invoke(messages)
+        fixed: FixedSQL = structured_llm.invoke(messages)  # type: ignore[assignment]
 
         return {
             "sql_query": fixed.sql_query,

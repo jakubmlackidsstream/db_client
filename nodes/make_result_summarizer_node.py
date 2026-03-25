@@ -1,6 +1,6 @@
 from typing import Dict, Any, List
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import SystemMessage, HumanMessage, AnyMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, AnyMessage
 
 from state import GraphState  # adjust to your actual module
 
@@ -148,6 +148,7 @@ def make_result_summarizer_node(llm: BaseChatModel, max_rows: int = 20, max_cols
         final_answer = f"{summary}\n\n{markdown_table}" if markdown_table else summary
 
         return {
+            "messages": [AIMessage(content=final_answer)],
             "final_answer": final_answer,
             "last_query": user_query,
             "last_sql_query": state.sql_query,

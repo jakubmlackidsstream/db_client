@@ -2,7 +2,7 @@
 
 from typing import Dict, Any
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from state import GraphState
 
 
@@ -15,7 +15,8 @@ def make_llm_direct_answer_node(llm: BaseChatModel):
         user_query = (state.user_query or "").strip()
 
         if not user_query:
-            return {"final_answer": "I didn't receive a question to answer."}
+            msg = "I didn't receive a question to answer."
+            return {"messages": [AIMessage(content=msg)], "final_answer": msg}
 
         system_prompt = (
             "You are a helpful assistant. "
@@ -32,6 +33,6 @@ def make_llm_direct_answer_node(llm: BaseChatModel):
         response = llm.invoke(messages)
         answer = response.content if hasattr(response, "content") else str(response)
 
-        return {"final_answer": answer}
+        return {"messages": [AIMessage(content=answer)], "final_answer": answer}
 
     return llm_direct_answer

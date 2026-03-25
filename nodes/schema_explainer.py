@@ -4,7 +4,7 @@ import json
 from typing import Dict, Any
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import SystemMessage, HumanMessage, AnyMessage
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, AnyMessage
 
 from state import GraphState  # adjust import to your path
 
@@ -36,7 +36,7 @@ def make_schema_explainer_node(llm: BaseChatModel):
                 "I don't have any database schema information loaded yet, "
                 "so I can't answer schema-related questions."
             )
-            return {"final_answer": msg}
+            return {"messages": [AIMessage(content=msg)], "final_answer": msg}
 
         schema_summary = state.db_schema_summary or "No textual summary available."
         schema_struct = state.db_schema  # this is the dict from schema_introspector
@@ -73,6 +73,6 @@ def make_schema_explainer_node(llm: BaseChatModel):
         resp = llm.invoke(messages)
         text = resp.content if hasattr(resp, "content") else str(resp)
 
-        return {"final_answer": text}
+        return {"messages": [AIMessage(content=text)], "final_answer": text}
 
     return schema_explainer

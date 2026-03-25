@@ -1,6 +1,7 @@
 # nodes/unsupported_handler.py
 
 from typing import Dict, Any
+from langchain_core.messages import AIMessage
 from state import GraphState
 
 
@@ -24,4 +25,4 @@ def unsupported_handler(state: GraphState) -> Dict[str, Any]:
         f"Your request was: *{user_query}*"
     )
 
-    return {"final_answer": msg}
+    return {"messages": [AIMessage(content=msg)], "final_answer": msg}

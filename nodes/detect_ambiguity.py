@@ -46,6 +46,7 @@ def make_detect_ambiguity_node(llm: BaseChatModel):
     def detect_ambiguity(state: GraphState) -> Dict[str, Any]:
         user_query = (state.user_query or "").strip()
         known_terms = state.known_terms or {}
+        history = state.conversation_history or []
 
         known_text = (
             "\n".join(f"- {k}: {v}" for k, v in known_terms.items())
@@ -63,7 +64,9 @@ def make_detect_ambiguity_node(llm: BaseChatModel):
             "- Do NOT flag standard SQL/DB concepts "
             "(table, row, column, count, sum, join, average, structure, "
             "schema, etc.).\n"
-            "- Do NOT flag terms already defined in the known-terms list.\n"
+            "- NEVER flag a term that already appears in the known-terms list "
+            "— even if its stored definition looks like a numbered list or "
+            "partial answer. Treat it as fully defined and assign confidence 0.\n"
             "- Do NOT flag clearly numeric thresholds "
             "(e.g. 'more than 100 orders').\n"
             "- Do NOT flag common verbs or UI words "
@@ -87,12 +90,27 @@ def make_detect_ambiguity_node(llm: BaseChatModel):
             "(median, average, mean, mode, percentile, std dev, variance, "
             "mediana, średnia, odchylenie) "
             "— they have precise mathematical definitions.\n"
+            "- Do NOT flag standard financial or accounting aggregates "
+            "(revenue, revenues, sales, income, profit, loss, cost, costs, "
+            "expenses, turnover, earnings, przychód, przychody, sprzedaż, "
+            "dochód, zysk, koszt, koszty) "
+            "— assume they mean the SUM of the relevant monetary column "
+            "in the database.\n"
+            "- Do NOT ask about time frames if the question already specifies "
+            "years, months, quarters, or dates — use those values directly.\n"
             "- Do NOT ask about time frames if the question contains no "
             "date, year, month, quarter, or period — assume full dataset.\n"
             "- Do NOT flag table or column names even if unfamiliar.\n"
+            "- Do NOT ask whether to use gross vs net, total vs partial, "
+            "or which channels/categories to include unless the query "
+            "explicitly mentions multiple competing options.\n"
             "- ONLY flag genuine domain-specific business terms whose "
             "interpretation depends on business rules and would produce "
             "different SQL depending on the answer.\n"
+            "- Do NOT flag 'same', 'the same', 'similar', 'like before', "
+            "'do the same', 'repeat' or equivalent when recent conversation "
+            "history shows what was previously requested — the intent is "
+            "clear from context.\n"
             "- Return an empty list when the query is already precise enough "
             "to write SQL without additional business context.\n\n"
             "Confidence guide:\n"
@@ -101,12 +119,18 @@ def make_detect_ambiguity_node(llm: BaseChatModel):
             "  0.7-0.9: probably ambiguous but context gives some hint\n"
             "  <0.7 : likely clear enough; prefer NOT to ask\n\n"
             "Examples of truly ambiguous terms (confidence >= 0.85): "
-            "'overloaded', 'busy', 'recent', 'top', 'large', 'active', "
+            "'overloaded', 'busy', 'recent', 'large', 'active', "
             "'slow', 'healthy', 'VIP customer', 'high-value order'."
+        )
+
+        history_text = (
+            "\n".join(f"  {i+1}. {msg}" for i, msg in enumerate(history[-6:]))
+            if history else "None."
         )
 
         user_prompt = (
             f"User query: {user_query}\n\n"
+            f"Recent conversation history:\n{history_text}\n\n"
             f"Already known terms:\n{known_text}"
         )
 
@@ -119,6 +143,11 @@ def make_detect_ambiguity_node(llm: BaseChatModel):
             t.term
             for t in result.candidates
             if t.confidence >= AMBIGUITY_CONFIDENCE_THRESHOLD
+            and not any(
+                t.term.lower() in k.lower()
+                or k.lower() in t.term.lower()
+                for k in known_terms
+            )
         ]
 
         return {"ambiguous_terms": confirmed}
