@@ -58,7 +58,13 @@ def make_question_classifier_node(llm: BaseChatModel):
             "- chitchat: general questions or explanations not requiring the database.\n"
             "- manage_terms: wants to add, update, delete, or list stored term definitions "
             "(e.g. 'define X as Y', 'change the definition of X', 'forget X', 'what terms do you know').\n"
-            "- unsupported: wants to write/modify/delete data, or otherwise out of scope.\n\n"
+            "- unsupported: wants to write/modify/delete DATA in the database "
+            "(INSERT, UPDATE, DELETE), or is otherwise out of scope.\n\n"
+            "IMPORTANT: Follow-up queries that refine or extend a previous result "
+            "are always db_read, even if they use words like 'add', 'include', "
+            "'also show', 'append'. For example: 'add 2014 for comparison', "
+            "'include last year', 'also show the count' — these modify the "
+            "SELECT query, not the database.\n\n"
             "Use the provided response schema."
         )
 

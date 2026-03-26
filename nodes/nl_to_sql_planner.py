@@ -34,6 +34,7 @@ def make_nl_to_sql_planner_node(llm: BaseChatModel):
             state.db_schema_summary or "No schema information available."
         )
         known_terms = state.known_terms or {}
+        last_sql_query = state.last_sql_query or ""
 
         if not user_query:
             return {
@@ -57,7 +58,16 @@ def make_nl_to_sql_planner_node(llm: BaseChatModel):
             "You will be given:\n"
             "- A description of the database schema.\n"
             "- The user's question.\n"
-            "- A brief conversation history.\n\n"
+            "- A brief conversation history.\n"
+            "- Optionally: the last successfully executed SQL query.\n\n"
+            "Follow-up query rule (IMPORTANT):\n"
+            "- If the user's question is a variation or modification of the "
+            "previous query (e.g. 'do the same for 2012', 'change year to "
+            "2014', 'sort by revenue descending', 'show only top 5'), "
+            "start from the previous SQL and apply only the minimal change "
+            "needed — do NOT rebuild the query from scratch.\n"
+            "- If no previous SQL is provided, or the question is unrelated, "
+            "write a new query from scratch.\n\n"
             "Your task is to:\n"
             "1. Understand what the user wants to retrieve.\n"
             "2. Produce a SINGLE SQL query that answers the question.\n"
@@ -81,10 +91,15 @@ def make_nl_to_sql_planner_node(llm: BaseChatModel):
             "    date('now', '-12 months') →  date((SELECT MAX(OrderDate) FROM Orders), '-12 months')\n"
             "    date('now', '-18 months') →  date((SELECT MAX(OrderDate) FROM Orders), '-18 months')\n"
             "  This rule applies everywhere in the query: WHERE, BETWEEN, CTEs, subqueries.\n\n"
-            "Date/time function style:\n"
-            "- Use standard SQL or PostgreSQL-style date functions "
-            "(DATE_TRUNC, EXTRACT, TO_CHAR, etc.) — do NOT attempt "
-            "SQLite-specific alternatives like strftime().\n\n"
+            "Date/time function style (CRITICAL):\n"
+            "- ALWAYS use PostgreSQL-style date functions: "
+            "DATE_TRUNC, EXTRACT, TO_CHAR.\n"
+            "- NEVER use strftime() under any circumstances — "
+            "not even as a fallback. It will produce silent NULL "
+            "values for quarter/year without raising an error.\n"
+            "- For quarters, use: EXTRACT(QUARTER FROM col)\n"
+            "- For years,    use: EXTRACT(YEAR FROM col)\n"
+            "- For months,   use: EXTRACT(MONTH FROM col)\n\n"
             "Return:\n"
             "- sql_query: the SQL string\n"
             "- sql_explanation: short explanation of how it answers the "
@@ -97,10 +112,17 @@ def make_nl_to_sql_planner_node(llm: BaseChatModel):
             lines = "\n".join(f"- {k}: {v}" for k, v in known_terms.items())
             known_terms_text = f"\nDomain terminology:\n{lines}\n"
 
+        last_sql_text = (
+            f"\nPrevious SQL query (modify if this is a follow-up):\n"
+            f"```sql\n{last_sql_query}\n```\n"
+            if last_sql_query else ""
+        )
+
         user_prompt = (
             "Database schema:\n"
             f"{schema_summary}\n"
-            f"{known_terms_text}\n"
+            f"{known_terms_text}"
+            f"{last_sql_text}\n"
             "User question:\n"
             f"{user_query}\n\n"
             "Recent conversation history:\n"
